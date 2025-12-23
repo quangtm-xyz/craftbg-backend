@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: background-remover-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_HOST
+        value: background-removal4.p.rapidapi.com
+      - key: FRONTEND_URL
+        sync: false
