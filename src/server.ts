@@ -210,6 +210,170 @@ app.post('/api/remove-bg', upload.single('file'), async (req: Request, res: Resp
   }
 });
 
+// Image enhancement endpoint - RapidAPI AI Face Enhancer
+app.post('/api/enhance-image', upload.single('file'), async (req: Request, res: Response) => {
+  const startTime = Date.now();
+
+  try {
+    if (!req.file) {
+      console.error('❌ No file uploaded');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    const ENHANCER_HOST = process.env.RAPIDAPI_HOST_ENHANCER || 'ai-face-enhancer.p.rapidapi.com';
+
+    if (!RAPIDAPI_KEY) {
+      console.error('❌ RAPIDAPI_KEY not configured');
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+
+    console.log('📤 Enhancing image:', {
+      filename: req.file.originalname,
+      size: `${(req.file.size / 1024).toFixed(2)} KB`,
+      mimetype: req.file.mimetype,
+      timestamp: new Date().toISOString()
+    });
+
+    console.log('🔧 API Configuration:', {
+      host: ENHANCER_HOST,
+      endpoint: `https://${ENHANCER_HOST}/face/editing/enhance-face`,
+      hasApiKey: !!RAPIDAPI_KEY,
+      apiKeyPrefix: RAPIDAPI_KEY.substring(0, 10) + '...'
+    });
+
+    console.log('🔄 Calling RapidAPI AI Face Enhancer...');
+
+    // Create FormData and append the image file
+    const formData = new FormData();
+    formData.append('image', req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+    });
+
+    // Call RapidAPI AI Face Enhancer
+    const apiResponse = await axios.post(
+      `https://${ENHANCER_HOST}/face/editing/enhance-face`,
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          'x-rapidapi-key': RAPIDAPI_KEY,
+          'x-rapidapi-host': ENHANCER_HOST,
+        },
+        timeout: 120000, // 120 second timeout
+        responseType: 'json',
+      }
+    );
+
+    console.log('📥 API Response (full):', JSON.stringify(apiResponse.data, null, 2));
+
+    console.log('📥 API Response:', {
+      status_code: apiResponse.data.error_detail?.status_code,
+      error_code: apiResponse.data.error_code,
+      has_image_url: !!(apiResponse.data.data?.image_url)
+    });
+
+    // Check for errors in response
+    if (apiResponse.data.error_code !== 0) {
+      console.error('❌ API returned error:', apiResponse.data.error_detail?.message);
+      return res.status(500).json({
+        error: 'Image enhancement failed',
+        details: apiResponse.data.error_detail?.message
+      });
+    }
+
+    // Get the enhanced image URL from response (nested in data.data)
+    const enhancedImageUrl = apiResponse.data.data?.image_url;
+    if (!enhancedImageUrl) {
+      console.error('❌ No image URL in response');
+      return res.status(500).json({ error: 'No enhanced image URL returned' });
+    }
+
+    console.log('🔄 Downloading enhanced image from:', enhancedImageUrl);
+
+    // Download the enhanced image
+    const imageResponse = await axios.get(enhancedImageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 60000,
+    });
+
+    const processingTime = Date.now() - startTime;
+    console.log(`✅ Success! Processing time: ${processingTime}ms`);
+
+    // Return enhanced image
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Content-Disposition', `attachment; filename=\"enhanced-${Date.now()}.jpg\"`);
+    res.send(imageResponse.data);
+
+  } catch (error: any) {
+    const processingTime = Date.now() - startTime;
+    console.error(`❌ Error after ${processingTime}ms:`, error.message);
+
+    if (error.response) {
+      const status = error.response.status;
+      const errorData = error.response.data;
+
+      console.error('📛 API Response Error:', {
+        status,
+        statusText: error.response.statusText,
+        headers: error.response.headers,
+      });
+
+      // Handle specific error codes
+      let errorMessage = 'Image enhancement failed';
+
+      if (status === 400) {
+        errorMessage = 'Invalid image format or corrupted file';
+      } else if (status === 401 || status === 403) {
+        errorMessage = 'API authentication error. Please check your API key';
+        console.error('🔑 AUTHENTICATION ERROR - Check RAPIDAPI_KEY');
+      } else if (status === 429) {
+        errorMessage = 'API rate limit exceeded. Please try again later';
+        console.error('⚠️ RATE LIMIT - RapidAPI quota exceeded');
+      } else if (status === 500) {
+        errorMessage = 'AI processing error. Please try again';
+        console.error('🤖 AI API ERROR - RapidAPI internal error');
+      } else if (status === 503) {
+        errorMessage = 'Service temporarily unavailable. Please try again in a moment';
+        console.error('⚠️ SERVICE UNAVAILABLE - RapidAPI may be down');
+      }
+
+      return res.status(status).json({
+        error: errorMessage,
+        details: errorData?.message || error.message
+      });
+    }
+
+    if (error.code === 'ECONNABORTED') {
+      console.error('⏱️ Request timeout after 60s');
+      return res.status(504).json({
+        error: 'Request timeout',
+        message: 'The AI processing took too long. Please try with a smaller image.'
+      });
+    }
+
+    if (error.code === 'ECONNREFUSED') {
+      console.error('🔌 CONNECTION REFUSED - RapidAPI may be unreachable');
+      return res.status(503).json({
+        error: 'Service unavailable',
+        message: 'Unable to connect to image enhancement service. Please try again later.'
+      });
+    }
+
+    console.error('🔥 Unexpected error:', {
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 // 404 handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Endpoint not found' });
@@ -227,4 +391,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/`);
   console.log(`📍 API endpoint: http://localhost:${PORT}/api/remove-bg`);
+  console.log(`📍 API endpoint: http://localhost:${PORT}/api/enhance-image`);
 });
