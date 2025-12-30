@@ -1,17 +1,25 @@
 services:
   - type: web
-    name: background-remover-api
-    env: node
-    region: oregon
-    plan: free
+    name: craftbg-backend
+    runtime: node
+    region: singapore  # Change to your preferred region: oregon, frankfurt, singapore
+    plan: free  # Options: free, starter, standard, pro
+    branch: main
     buildCommand: npm install && npm run build
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
+      - key: PORT
+        value: 5000
       - key: NODE_ENV
         value: production
+      - key: RAPIDAPI_HOST
+        value: ai-image-upscaler6.p.rapidapi.com
+      # Secret environment variables (add these manually in Render Dashboard)
+      # These are marked with sync: false for security
+      - key: REMOVEBG_API_KEY
+        sync: false
       - key: RAPIDAPI_KEY
         sync: false
-      - key: RAPIDAPI_HOST
-        value: background-removal4.p.rapidapi.com
-      - key: FRONTEND_URL
+      - key: CORS_ORIGIN
         sync: false
