@@ -21,16 +21,16 @@
     "form-data": "^4.0.5",
     "helmet": "^7.1.0",
     "multer": "^1.4.5-lts.1",
-    "replicate": "^1.4.0"
-  },
-  "devDependencies": {
+    "replicate": "^1.4.0",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.10.5",
-    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2"
   },
   "engines": {
     "node": "20.x"
